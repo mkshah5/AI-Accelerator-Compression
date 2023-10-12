@@ -48,7 +48,6 @@ if IS_BASELINE_NETWORK:
 else:
     MODEL_NAME = "torch_matmul_resnet34_cf"+str(CF)
 
-MODEL = ResNet34(TRAIN_SIZE)
 
 # uncompressed_data = np.fromfile(dataset_path, dtype=np.float32)
 # uncompressed_data = uncompressed_data.reshape(500, 500, 100)
@@ -89,20 +88,22 @@ class ResNetCompress(nn.Module):
         lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
         self.lhs = torch.as_tensor(lhs).to(torch.bfloat16)
         self.rhs = torch.as_tensor(rhs).to(torch.bfloat16)
+        self.internal_model = ResNet34()
 
     # assume bs > 1
-    def forward(self, x, labels):
+    def forward(self, x):
 
-        out = MODEL(x)
+        out = self.internal_model(x)
         return out
     
 class ResNetBase(nn.Module):
     def __init__(self):
         super(ResNetBase, self).__init__()
+        self.internal_model = ResNet34()
 
     # assume bs > 1
-    def forward(self, x, labels):
-        out = MODEL(x)
+    def forward(self, x):
+        out = self.internal_model(x)
         return out
 
 def add_common_args(parser: argparse.ArgumentParser):

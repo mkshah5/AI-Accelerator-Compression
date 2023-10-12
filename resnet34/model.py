@@ -105,4 +105,4 @@ def ResNet18():
 
 
 def ResNet34(bs=32):
-    return ResNetSkeleton(BasicBlock, [3, 4, 6, 3],bs=bs)
+    return ResNetSkeleton(BasicBlock, [3, 4, 6, 3])

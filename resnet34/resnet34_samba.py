@@ -52,7 +52,7 @@ if IS_BASELINE_NETWORK:
 else:
     MODEL_NAME = "matmul_resnet34_cf"+str(CF)
 
-MODEL = ResNet34(TRAIN_SIZE)
+
 
 # Dependent on the number of channels
 def full_comp(x):
@@ -74,6 +74,7 @@ class ResNetCompress(nn.Module):
         self.lhs = samba.from_torch_tensor(torch.as_tensor(lhs).to(torch.bfloat16),name='lhs')
         self.rhs = samba.from_torch_tensor(torch.as_tensor(rhs).to(torch.bfloat16),name='rhs')
 
+        self.internal_model = ResNet34()
     # assume bs > 1
     def forward(self, x, labels):
         r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
@@ -81,7 +82,7 @@ class ResNetCompress(nn.Module):
         b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
         out = torch.stack((r,g,b),1)
 
-        out = MODEL(out)
+        out = self.internal_model(out)
         loss = self.criterion(out, labels)
         return out, loss
     
@@ -89,10 +90,11 @@ class ResNetBase(nn.Module):
     def __init__(self):
         super(ResNetBase, self).__init__()
         self.criterion = nn.CrossEntropyLoss()
+        self.internal_model = ResNet34()
 
     # assume bs > 1
     def forward(self, x, labels):
-        out = MODEL(x)
+        out = self.internal_model(x)
         loss = self.criterion(out, labels)
         return out, loss
 
