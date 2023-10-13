@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 from pprint import pprint
 from pathlib import Path
-from libpressio import PressioCompressor
+#from libpressio import PressioCompressor
+import sys
+sys.path.append("../")
 
 import argparse
 import os
@@ -48,46 +50,28 @@ if IS_BASELINE_NETWORK:
 else:
     MODEL_NAME = "torch_matmul_resnet34_cf"+str(CF)
 
-
-# uncompressed_data = np.fromfile(dataset_path, dtype=np.float32)
-# uncompressed_data = uncompressed_data.reshape(500, 500, 100)
-# decompressed_data = uncompressed_data.copy()
-
-# load and configure the compressor
-compressor = PressioCompressor.from_config({
-    "compressor_id": "sz",
-    "compressor_config": {
-        "sz:error_bound_mode_str": "abs",
-        "sz:abs_err_bound": 1e-6,
-        "sz:metric": "size"
-        }
-    })
-
-
-# preform compression and decompression
-# compressed = compressor.encode(uncompressed_data)
-# decompressed = compressor.decode(compressed, decompressed_data)
-
-# # print out some metrics collected during compression
-# pprint(compressor.get_metrics())
+COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
 # Dependent on the number of channels
-def full_comp(x):
-    n_x = x.numpy()
-    decomp = n_x.copy()
-    out = compressor.encode(n_x)
-    decomp = compressor.decode(out)
-    return decomp
+def full_comp(x, err=2.7e-3):
+    fshape = str(TRAIN_SIZE)+" "+str(PARAMS.nchannels)+" "+str(RPIX)+" "+str(CPIX)
+    n_x = x.numpy().astype(np.float32)
+    n_x.tofile('tmpb.bin')
+    c_command = COMPRESSOR_PATH+" -z -f -M ABS -A "+str(err)+" -i tmpb.bin -4 "+fshape
+    d_command = COMPRESSOR_PATH+" -x -f -s tmpb.bin.sz -4 "+fshape+" -i tmpb.bin"
+    os.system(c_command)
+    cr = (os.stat('tmpb.bin').st_size)/os.stat('tmpb.bin.sz').st_size
+    print("CR: "+str(cr))
+    os.system(d_command)
+    decomp = np.fromfile('tmpb.bin.sz.out',dtype=np.float32)
+    decomp = np.reshape(decomp, (TRAIN_SIZE,PARAMS.nchannels,RPIX,CPIX))
+    return torch.from_numpy(decomp)
 
 
 class ResNetCompress(nn.Module):
     def __init__(self):
         super(ResNetCompress, self).__init__()
 
-        self.decompress = decompress
-        lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
-        self.lhs = torch.as_tensor(lhs).to(torch.bfloat16)
-        self.rhs = torch.as_tensor(rhs).to(torch.bfloat16)
         self.internal_model = ResNet34()
 
     # assume bs > 1
@@ -111,7 +95,7 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
-
+    parser.add_argument('--device',type=int,default=0)
 
 def add_run_args(parser: argparse.ArgumentParser):
     parser.add_argument('--train-torch', action='store_true', help='train FP32 PyTorch version of application')
@@ -158,23 +142,26 @@ def prepare_fulldata(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLoa
     return train_loader, valid_loader
 
 
-def train(args: argparse.Namespace, model: nn.Module, optimizer) -> None:
+def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
     train_loader, test_loader = prepare_fulldata(args)
     loss_function = nn.CrossEntropyLoss()
     # Train the model
+    model = model.cuda()
     total_step = len(train_loader)
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
-            images = torch.mul(images, 255)
-            
+            labels = labels.cuda()
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
-
             
+            
+            images = torch.mul(images, 255)
+            images = images.cuda()
             run_start = time.time()
                     
             outputs = model(images)
+            
             loss = loss_function(outputs,labels)
 
             optimizer.zero_grad()
@@ -198,7 +185,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer) -> None:
             
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
-
+                images.to(device)
                 outputs = model(images)
                 loss = loss_function(outputs,labels)
                 
@@ -219,11 +206,11 @@ def main():
     add_common_args(parser)
     add_run_args(parser)
     args = parser.parse_args()
-
+    command = "train"
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
 
-    if args.command == "test":
+    if command == "test":
         model = torch.load(MODEL_NAME+".pt").to(device)
     else:
         if IS_BASELINE_NETWORK:
@@ -235,7 +222,7 @@ def main():
                                 lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
-    train(args, model, optimizer)
+    train(args, model, optimizer,device)
 
 
 if __name__ == '__main__':
