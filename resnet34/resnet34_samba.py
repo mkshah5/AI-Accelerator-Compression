@@ -31,7 +31,7 @@ from sambaflow.samba.utils.pef_utils import get_pefmeta
 
 from utils.utils import TrainingParams
 from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
-from resnet34_config import PARAMS
+from config import PARAMS
 from model import ResNet34
 
 MOCK_SAMBA_RUNTIME = use_mock_samba_runtime()
