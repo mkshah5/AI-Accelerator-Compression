@@ -32,6 +32,7 @@ from utils.utils import TrainingParams
 from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
 from config import PARAMS
 from model import EMDenoiseNet
+from data_utils import get_data_generator
 
 TRAIN_SIZE = PARAMS.batch_size
 TEST_SIZE = PARAMS.batch_size
@@ -46,11 +47,13 @@ CBLKS = PARAMS.cblks
 IS_BASELINE_NETWORK = PARAMS.is_base
 
 if IS_BASELINE_NETWORK:
-    MODEL_NAME = "torch_base_resnet34"
+    MODEL_NAME = "torch_base_emdenoise"
 else:
-    MODEL_NAME = "torch_matmul_resnet34_cf"+str(CF)
+    MODEL_NAME = "torch_matmul_emdenoise_cf"+str(CF)
 
 COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
+
+DATA_DIR = "/home/shahm/sciml_bench/datasets/em_graphene_sim"
 
 # Dependent on the number of channels
 def full_comp(x, err=2.7e-3):
@@ -112,38 +115,9 @@ def add_run_args(parser: argparse.ArgumentParser):
                         help="The folder to download the MNIST dataset to.")
 
 
-def prepare_fulldata(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLoader]:
-
-    dataset_train = datasets.CIFAR10(
-        root='data',
-        train=True,
-        download=True,
-        transform=ToTensor(),
-    )
-    # CIFAR10 validation dataset.
-    dataset_valid = datasets.CIFAR10(
-        root='data',
-        train=False,
-        download=True,
-        transform=ToTensor(),
-    )
-    # Create data loaders.
-    train_loader = DataLoader(
-        dataset_train, 
-        batch_size=TRAIN_SIZE,
-        shuffle=True
-    )
-    valid_loader = DataLoader(
-        dataset_valid, 
-        batch_size=TEST_SIZE,
-        shuffle=False
-    )
-
-    return train_loader, valid_loader
-
-
 def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
-    train_loader, test_loader = prepare_fulldata(args)
+    train_loader = get_data_generator(Path(DATA_DIR) / 'train', TRAIN_SIZE, is_inference=False)
+    test_loader = get_data_generator(Path(DATA_DIR) / 'inference', TRAIN_SIZE, is_inference=True)
     loss_function = nn.MSELoss()
     # Train the model
     model = model.cuda()
@@ -151,6 +125,8 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
+            images = torch.permute(images, (0, 3, 1, 2))
+            labels = torch.permute(labels, (0, 3, 1, 2))
             labels = labels.cuda()
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
@@ -182,6 +158,8 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             total_loss = 0
             for images, labels in test_loader:
                 images = torch.mul(images, 255)
+                images = torch.permute(images, (0, 3, 1, 2))
+                labels = torch.permute(labels, (0, 3, 1, 2))
             
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
@@ -191,9 +169,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
                 
                 total_loss += loss.mean()
 
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum()
 
             test_acc = 100.0 * correct / total
             print('Test Accuracy: {:.2f}'.format(test_acc),

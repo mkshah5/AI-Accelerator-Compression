@@ -3,6 +3,9 @@ import os
 from distutils.util import strtobool
 from typing import Tuple
 import time
+from pathlib import Path
+import sys
+sys.path.append("../")
 
 import torch
 import torch.nn as nn
@@ -33,6 +36,7 @@ from utils.utils import TrainingParams
 from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
 from config import PARAMS
 from model import EMDenoiseNet
+from data_utils import get_data_generator
 
 MOCK_SAMBA_RUNTIME = use_mock_samba_runtime()
 TRAIN_SIZE = PARAMS.batch_size
@@ -121,7 +125,7 @@ def get_inputs_compress(args: argparse.Namespace) -> Tuple[samba.SambaTensor, sa
     images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX)
     images = full_comp(images)
     images = samba.from_torch_tensor(images, name='image', batch_dim=0)
-    gt = samba.from_torch_tensor(torch.randn(TRAIN_SIZE, 1, RPIX, CPIX), name='gt', batch_dim=0)
+    gt = samba.from_torch_tensor(torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX), name='gt', batch_dim=0)
     
       
     return (images, gt)
@@ -129,44 +133,14 @@ def get_inputs_compress(args: argparse.Namespace) -> Tuple[samba.SambaTensor, sa
 def get_inputs_base(args: argparse.Namespace) -> Tuple[samba.SambaTensor, samba.SambaTensor]:
     images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX)
     images = samba.from_torch_tensor(images, name='image', batch_dim=0)
-    gt = samba.from_torch_tensor(torch.randn(TRAIN_SIZE, 1, RPIX, CPIX), name='gt', batch_dim=0)
+    gt = samba.from_torch_tensor(torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX), name='gt', batch_dim=0)
         
     return (images, gt)
 
 
-
-def prepare_fulldata(args: argparse.Namespace) -> Tuple[torch.utils.data.DataLoader]:
-
-    dataset_train = datasets.CIFAR10(
-        root='data',
-        train=True,
-        download=True,
-        transform=ToTensor(),
-    )
-    # CIFAR10 validation dataset.
-    dataset_valid = datasets.CIFAR10(
-        root='data',
-        train=False,
-        download=True,
-        transform=ToTensor(),
-    )
-    # Create data loaders.
-    train_loader = DataLoader(
-        dataset_train, 
-        batch_size=TRAIN_SIZE,
-        shuffle=True
-    )
-    valid_loader = DataLoader(
-        dataset_valid, 
-        batch_size=TEST_SIZE,
-        shuffle=False
-    )
-
-    return train_loader, valid_loader
-
-
 def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD) -> None:
-    train_loader, test_loader = prepare_fulldata(args)
+    train_loader = get_data_generator(Path(DATA_DIR) / 'train', TRAIN_SIZE, is_inference=False)
+    test_loader = get_data_generator(Path(DATA_DIR) / 'inference', TRAIN_SIZE, is_inference=True)
 
     # Train the model
     total_step = len(train_loader)
@@ -175,7 +149,8 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
             images = torch.mul(images, 255)
-            
+            images = torch.permute(images, (0, 3, 1, 2))
+            labels = torch.permute(labels, (0, 3, 1, 2))
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
 
@@ -209,7 +184,8 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
             total_loss = 0
             for images, labels in test_loader:
                 images = torch.mul(images, 255)
-            
+                images = torch.permute(images, (0, 3, 1, 2))
+                labels = torch.permute(labels, (0, 3, 1, 2))
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
 
@@ -226,9 +202,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
 
                 total_loss += loss.mean()
 
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum()
 
             test_acc = 100.0 * correct / total
             print('Test Accuracy: {:.2f}'.format(test_acc),
