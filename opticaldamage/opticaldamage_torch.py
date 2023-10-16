@@ -189,9 +189,9 @@ def main():
         model = torch.load(MODEL_NAME+".pt").to(device)
     else:
         if IS_BASELINE_NETWORK:
-            model = EMDenoiseBase().to(device)
+            model = OpticalDamageBase().to(device)
         else:
-            model = EMDenoiseCompress().to(device)
+            model = OpticalDamageCompress().to(device)
 
     optimizer = torch.optim.SGD(model.parameters(), 
                                 lr=args.lr,

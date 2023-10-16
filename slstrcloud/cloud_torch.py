@@ -31,7 +31,7 @@ from typing import Type
 from utils.utils import TrainingParams
 from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
 from config import PARAMS
-from model import EMDenoiseNet
+from model import CloudMaskNet
 from data_utils import get_data_generator
 
 TRAIN_SIZE = PARAMS.batch_size
@@ -47,13 +47,13 @@ CBLKS = PARAMS.cblks
 IS_BASELINE_NETWORK = PARAMS.is_base
 
 if IS_BASELINE_NETWORK:
-    MODEL_NAME = "torch_base_emdenoise"
+    MODEL_NAME = "torch_base_cloudmask"
 else:
-    MODEL_NAME = "torch_matmul_emdenoise_cf"+str(CF)
+    MODEL_NAME = "torch_matmul_cloudmask_cf"+str(CF)
 
 COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
-DATA_DIR = "/home/shahm/sciml_bench/datasets/em_graphene_sim"
+DATA_DIR = "/home/shahm/sciml_bench/datasets/cloud_slstr_ds1"
 
 # Dependent on the number of channels
 def full_comp(x, err=2.7e-3):
@@ -71,11 +71,11 @@ def full_comp(x, err=2.7e-3):
     return torch.from_numpy(decomp)
 
 
-class EMDenoiseCompress(nn.Module):
+class CloudMaskCompress(nn.Module):
     def __init__(self):
-        super(EMDenoiseCompress, self).__init__()
+        super(CloudMaskCompress, self).__init__()
 
-        self.internal_model = EMDenoiseNet()
+        self.internal_model = CloudMaskNet((RPIX,CPIX,PARAMS.nchannels))
 
     # assume bs > 1
     def forward(self, x):
@@ -83,10 +83,10 @@ class EMDenoiseCompress(nn.Module):
         out = self.internal_model(x)
         return out
     
-class EMDenoiseBase(nn.Module):
+class CloudMaskBase(nn.Module):
     def __init__(self):
-        super(EMDenoiseBase, self).__init__()
-        self.internal_model = EMDenoiseNet()
+        super(CloudMaskBase, self).__init__()
+        self.internal_model = CloudMaskNet((RPIX,CPIX,PARAMS.nchannels))
 
     # assume bs > 1
     def forward(self, x):
@@ -116,17 +116,16 @@ def add_run_args(parser: argparse.ArgumentParser):
 
 
 def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
-    train_loader = get_data_generator(Path(DATA_DIR) / 'train', TRAIN_SIZE, is_inference=False)
-    test_loader = get_data_generator(Path(DATA_DIR) / 'inference', TRAIN_SIZE, is_inference=True)
-    loss_function = nn.MSELoss()
+    train_loader, test_loader = get_data_generator(DATA_DIR)
+
+    loss_function = nn.BCELoss()
     # Train the model
     model = model.cuda()
     total_step = len(train_loader)
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
-            images = torch.permute(images, (0, 3, 1, 2))
-            labels = torch.permute(labels, (0, 3, 1, 2))
+            
             labels = labels.cuda()
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
@@ -157,9 +156,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             total = 0
             total_loss = 0
             for images, labels in test_loader:
-                
-                images = torch.permute(images, (0, 3, 1, 2))
-                labels = torch.permute(labels, (0, 3, 1, 2))
             
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
@@ -190,9 +186,9 @@ def main():
         model = torch.load(MODEL_NAME+".pt").to(device)
     else:
         if IS_BASELINE_NETWORK:
-            model = EMDenoiseBase().to(device)
+            model = CloudMaskBase().to(device)
         else:
-            model = EMDenoiseCompress().to(device)
+            model = CloudMaskCompress().to(device)
 
     optimizer = torch.optim.SGD(model.parameters(), 
                                 lr=args.lr,
