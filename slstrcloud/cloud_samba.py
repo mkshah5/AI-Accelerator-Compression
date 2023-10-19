@@ -119,7 +119,7 @@ class CloudMaskBase(nn.Module):
 
 def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--num-classes', type=int, default=10, help='Number of output classes')
-    parser.add_argument('--lr', type=float, default=0.0005)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
 
@@ -218,7 +218,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
                 total_loss += loss.mean()
 
 
-            test_acc = 100.0 * correct / total
+            #test_acc = 100.0 * correct / total
             print('Test Accuracy: {:.2f}'.format(test_acc),
                   ' Loss: {:.4f}'.format(total_loss.item() / (len(test_loader))))
     samba.session.to_cpu(model)

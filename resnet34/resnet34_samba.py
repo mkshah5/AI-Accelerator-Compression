@@ -3,6 +3,8 @@ import os
 from distutils.util import strtobool
 from typing import Tuple
 import time
+import sys
+sys.path.append("../")
 
 import torch
 import torch.nn as nn

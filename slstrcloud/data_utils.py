@@ -35,7 +35,7 @@ class CloudDataset(torch.utils.data.Dataset):
         return img, msk
     
     def load_data(self, path):
-        path = path.decode()
+        #path = path.decode()
 
         with h5py.File(path, 'r') as handle:
             refs = handle['refs'][:]
@@ -58,12 +58,12 @@ class CloudDataset(torch.utils.data.Dataset):
         img = normalize(img)
         msk = self._transform_image(msk)
 
-        return img, msk
+        return torch.from_numpy(img).to(torch.float32), torch.from_numpy(msk).to(torch.float32)
         
     def _transform_image(self, img):
         img = img[0:PARAMS.rpix, 0:PARAMS.cpix]
         
-        return torch.from_numpy(img.transpose((2,0,1)))
+        return img.transpose((2,0,1))
 
 
 
