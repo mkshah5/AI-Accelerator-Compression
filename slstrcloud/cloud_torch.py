@@ -55,6 +55,8 @@ COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
 DATA_DIR = "/home/shahm/sciml_bench/datasets/cloud_slstr_ds1"
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 # Dependent on the number of channels
 def full_comp(x, err=2.7e-3):
     fshape = str(TRAIN_SIZE)+" "+str(PARAMS.nchannels)+" "+str(RPIX)+" "+str(CPIX)
@@ -194,6 +196,7 @@ def main():
                                 lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
+    print("Num params: "+str(count_parameters(model))) 
     train(args, model, optimizer,device)
 
 

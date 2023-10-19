@@ -53,15 +53,17 @@ else:
 
 COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
-DATA_DIR = "/home/shahm/sciml_bench/datasets/em_graphene_sim"
+DATA_DIR = "/home/mkshah5/sciml_bench/datasets/em_graphene_sim"
 
 # Dependent on the number of channels
-def full_comp(x, err=2.7e-3):
+def full_comp(x, err=9.6e-4):
     fshape = str(TRAIN_SIZE)+" "+str(PARAMS.nchannels)+" "+str(RPIX)+" "+str(CPIX)
+    print(fshape)
+    print(x.shape)
     n_x = x.numpy().astype(np.float32)
     n_x.tofile('tmpb.bin')
     c_command = COMPRESSOR_PATH+" -z -f -M ABS -A "+str(err)+" -i tmpb.bin -4 "+fshape
-    d_command = COMPRESSOR_PATH+" -x -f -s tmpb.bin.sz -4 "+fshape+" -i tmpb.bin"
+    d_command = COMPRESSOR_PATH+" -x -f -s tmpb.bin.sz -3 32 256 256 -i tmpb.bin"
     os.system(c_command)
     cr = (os.stat('tmpb.bin').st_size)/os.stat('tmpb.bin.sz').st_size
     print("CR: "+str(cr))
@@ -158,20 +160,22 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             total_loss = 0
             for images, labels in test_loader:
                 
-                images = torch.permute(images, (0, 3, 1, 2))
-                labels = torch.permute(labels, (0, 3, 1, 2))
-            
+                #images = torch.permute(images, (0, 3, 1, 2))
+                #labels = torch.permute(labels, (0, 3, 1, 2))
+                #print(images.shape)
+                #print(labels.shape)
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
                 images = torch.mul(images, 255)
-                images.to(device)
+                images = images.cuda()
+                labels = labels.cuda()
                 outputs = model(images)
                 loss = loss_function(outputs,labels)
                 
                 total_loss += loss.mean()
 
 
-            test_acc = 100.0 * correct / total
+            #test_acc = 100.0 * correct / total
             print('Test Accuracy: {:.2f}'.format(test_acc),
                   ' Loss: {:.4f}'.format(total_loss.item() / (len(test_loader))))
     

@@ -52,8 +52,11 @@ else:
 
 COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 # Dependent on the number of channels
-def full_comp(x, err=2.7e-3):
+def full_comp(x, err=1.1e-1):
     fshape = str(TRAIN_SIZE)+" "+str(PARAMS.nchannels)+" "+str(RPIX)+" "+str(CPIX)
     n_x = x.numpy().astype(np.float32)
     n_x.tofile('tmpb.bin')
@@ -181,11 +184,14 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             total = 0
             total_loss = 0
             for images, labels in test_loader:
-                images = torch.mul(images, 255)
             
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
-                images.to(device)
+           
+                images = torch.mul(images, 255)
+                images = images.cuda()
+                labels = labels.cuda()
+
                 outputs = model(images)
                 loss = loss_function(outputs,labels)
                 
@@ -222,6 +228,7 @@ def main():
                                 lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
+    print("Num params: "+str(count_parameters(model))) 
     train(args, model, optimizer,device)
 
 
