@@ -71,8 +71,8 @@ class UNetSkeleton(nn.Module):
 
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
-        self.last_layer = nn.Conv2d(32, 1, kernel_size=1, padding=1)
-
+        self.last_layer = nn.Conv2d(32, 1, kernel_size=1)
+        
     def forward(self, x):
         
         x1_skip = self.b1(x)
@@ -96,9 +96,9 @@ class UNetSkeleton(nn.Module):
         x7_0 = self.b7_start(x6_2)
         x7_1 = torch.cat((x7_0, x1_skip), dim=1)
         x7_2 = self.b7(x7_1)
-
         out = self.sigmoid(self.last_layer(x7_2))
 
+        #print(out.shape)
         return out
     
 def CloudMaskNet(input_shape=(256,256,9)):
