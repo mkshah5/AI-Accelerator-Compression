@@ -34,29 +34,25 @@ from sambaflow.samba.utils.pef_utils import get_pefmeta
 
 from utils.utils import TrainingParams
 from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
-from config import PARAMS
 from model import OpticalDamageNet
 from data_utils import get_data_generator
 
 MOCK_SAMBA_RUNTIME = use_mock_samba_runtime()
-TRAIN_SIZE = PARAMS.batch_size
-TEST_SIZE = PARAMS.batch_size
-CF = PARAMS.cf
+PARAMS = None
+TRAIN_SIZE = None
+TEST_SIZE = None
+CF = None
+RPIX = None
+CPIX = None
+BD = None
+RBLKS = None
+CBLKS = None
+IS_BASELINE_NETWORK = None
+MODEL_NAME = None
 
-RPIX = PARAMS.rpix
-CPIX = PARAMS.cpix
-BD = PARAMS.BD
-RBLKS = PARAMS.rblks
-CBLKS = PARAMS.cblks
+BENCHMARK_NAME = "opticaldamage"
+VERSION = "samba"
 
-IS_BASELINE_NETWORK = PARAMS.is_base
-
-SAMPLE_SHAPE = (RPIX, CPIX, PARAMS.nchannels)
-
-if IS_BASELINE_NETWORK:
-    MODEL_NAME = "base_opticaldamage"
-else:
-    MODEL_NAME = "matmul_opticaldamage_cf"+str(CF)
 
 DATA_DIR = "/home/shahm/sciml_bench/datasets/optical_damage_ds1"
 
@@ -79,7 +75,7 @@ class OpticalDamageCompress(nn.Module):
         self.lhs = samba.from_torch_tensor(torch.as_tensor(lhs).to(torch.bfloat16),name='lhs')
         self.rhs = samba.from_torch_tensor(torch.as_tensor(rhs).to(torch.bfloat16),name='rhs')
 
-        self.internal_model = OpticalDamageNet(SAMPLE_SHAPE)
+        self.internal_model = OpticalDamageNet((RPIX, CPIX, PARAMS.nchannels))
     # assume bs > 1
     def forward(self, x, gt):
         o = decompress(x,self.lhs,self.rhs)
@@ -93,7 +89,7 @@ class OpticalDamageBase(nn.Module):
     def __init__(self):
         super(OpticalDamageBase, self).__init__()
         self.criterion = nn.MSELoss()
-        self.internal_model = OpticalDamageNet(SAMPLE_SHAPE)
+        self.internal_model = OpticalDamageNet((RPIX, CPIX, PARAMS.nchannels))
 
     # assume bs > 1
     def forward(self, x, gt):
@@ -106,7 +102,7 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
-
+    parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
 
 def add_run_args(parser: argparse.ArgumentParser):
     parser.add_argument('--train-torch', action='store_true', help='train FP32 PyTorch version of application')
@@ -211,10 +207,32 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
     torch.save(model, MODEL_NAME+".pt")
 
 def main():
+    global PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME
+
     args = parse_app_args(dev_mode=True,
                           common_parser_fn=add_common_args,
                           test_parser_fn=add_run_args,
                           run_parser_fn=add_run_args)
+    
+    PARAMS = TrainingParams(args.config_path)
+    TRAIN_SIZE = PARAMS.batch_size
+    TEST_SIZE = PARAMS.batch_size
+    CF = PARAMS.cf
+
+    RPIX = PARAMS.rpix
+    CPIX = PARAMS.cpix
+    BD = PARAMS.BD
+    RBLKS = PARAMS.rblks
+    CBLKS = PARAMS.cblks
+
+    IS_BASELINE_NETWORK = PARAMS.is_base
+
+    if IS_BASELINE_NETWORK:
+        MODEL_NAME = VERSION+"_base_"+BENCHMARK_NAME
+    else:
+        MODEL_NAME = VERSION+"_matmul_"+BENCHMARK_NAME+"_cf"+str(CF)
+
+
     utils.set_seed(256)
     if IS_BASELINE_NETWORK:
         inputs = get_inputs_base(args)
