@@ -106,7 +106,8 @@ def get_data_generator(base_dataset_dir: Path, batch_size: int, is_inference=Fal
     params = {
         'batch_size': batch_size,
         'shuffle': shuffle_flag,
-        'num_workers': 2
+        'num_workers': 2,
+        'drop_last': True
     }
 
     if is_inference: 

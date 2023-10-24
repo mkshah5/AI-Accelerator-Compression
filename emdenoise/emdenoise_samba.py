@@ -138,7 +138,7 @@ def get_inputs_base(args: argparse.Namespace) -> Tuple[samba.SambaTensor, samba.
 def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD) -> None:
     train_loader = get_data_generator(Path(DATA_DIR) / 'train', TRAIN_SIZE, is_inference=False)
     test_loader = get_data_generator(Path(DATA_DIR) / 'inference', TRAIN_SIZE, is_inference=True)
-
+    h_l = nn.MSELoss()
     # Train the model
     total_step = len(train_loader)
     hyperparam_dict = {"lr": args.lr, "momentum": args.momentum, "weight_decay": args.weight_decay}
@@ -165,7 +165,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
                                             reduce_on_rdu=args.reduce_on_rdu)
             
             loss, outputs = samba.to_torch(loss), samba.to_torch(outputs)
-            
+            loss = h_l(outputs,labels)
             run_end = time.time()
             samba.session.end_runtime_profile(MODEL_NAME+'.log')
             avg_loss += loss.mean()
@@ -181,8 +181,8 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
             total_loss = 0
             for images, labels in test_loader:
                 images = torch.mul(images, 255)
-                images = torch.permute(images, (0, 3, 1, 2))
-                labels = torch.permute(labels, (0, 3, 1, 2))
+                #images = torch.permute(images, (0, 3, 1, 2))
+                #labels = torch.permute(labels, (0, 3, 1, 2))
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
 
@@ -196,7 +196,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
             
 
                 loss, outputs = samba.to_torch(loss), samba.to_torch(outputs)
-
+                loss = h_l(outputs,labels)
                 total_loss += loss.mean()
 
 
