@@ -7,9 +7,10 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torch import nn, optim
 import torch
-from config import PARAMS
+#from config import PARAMS
 
-IMAGE_SHAPE = (PARAMS.batch_size, PARAMS.nchannels,PARAMS.rpix, PARAMS.cpix)
+#IMAGE_SHAPE = (PARAMS.batch_size, PARAMS.nchannels,PARAMS.rpix, PARAMS.cpix)
+PARAMS_C = None
 
 from typing import Union, List
 
@@ -61,21 +62,22 @@ class CloudDataset(torch.utils.data.Dataset):
         return torch.from_numpy(img).to(torch.float32), torch.from_numpy(msk).to(torch.float32)
         
     def _transform_image(self, img):
-        img = img[0:PARAMS.rpix, 0:PARAMS.cpix]
+        img = img[0:PARAMS_C.rpix, 0:PARAMS_C.cpix]
         
         return img.transpose((2,0,1))
 
 
 
 # Dataloader specific to this benchmark
-def get_data_generator(dataset_dir: str):
-    
+def get_data_generator(dataset_dir: str, param):
+    global PARAMS_C
+    PARAMS_C = param
     data_paths = list(Path(dataset_dir).glob('**/S3A*.hdf'))
     train_paths, test_paths = train_test_split(data_paths, train_size=0.8, random_state=42)
 
     train_dataset = CloudDataset(train_paths)
     test_dataset = CloudDataset(test_paths)
-    train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=PARAMS.batch_size, shuffle=False,num_workers=1,drop_last=True)
-    test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=PARAMS.batch_size, shuffle=True,num_workers=1,drop_last=True)
+    train_data_loader = torch.utils.data.DataLoader(train_dataset, batch_size=param.batch_size, shuffle=False,num_workers=1,drop_last=True)
+    test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=param.batch_size, shuffle=True,num_workers=1,drop_last=True)
 
     return train_data_loader, test_data_loader

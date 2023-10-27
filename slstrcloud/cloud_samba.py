@@ -154,7 +154,7 @@ def get_inputs_base(args: argparse.Namespace) -> Tuple[samba.SambaTensor, samba.
 
 
 def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD) -> None:
-    train_loader, test_loader = get_data_generator(DATA_DIR)
+    train_loader, test_loader = get_data_generator(DATA_DIR,PARAMS)
 
     # Train the model
     total_step = len(train_loader)

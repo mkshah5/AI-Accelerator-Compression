@@ -200,7 +200,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
                 total_loss += loss.mean()
 
 
-            test_acc = 100.0 * correct / total
+            #test_acc = 100.0 * correct / total
             print('Test Accuracy: {:.2f}'.format(test_acc),
                   ' Loss: {:.4f}'.format(total_loss.item() / (len(test_loader))))
     samba.session.to_cpu(model)

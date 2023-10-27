@@ -179,7 +179,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
 
-            samba.session.start_runtime_profile()
             
             run_start = time.time()
             sn_images = samba.from_torch_tensor(images, name='image', batch_dim=0)
@@ -195,7 +194,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
             loss, outputs = samba.to_torch(loss), samba.to_torch(outputs)
             
             run_end = time.time()
-            samba.session.end_runtime_profile(MODEL_NAME+'.log')
             avg_loss += loss.mean()
             run_time = run_end-run_start
             print("===Timing===")
@@ -213,6 +211,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
 
+                samba.session.start_runtime_profile()
                 sn_images = samba.from_torch_tensor(images, name='image', batch_dim=0)
             
                 sn_labels = samba.from_torch_tensor(labels, name='label', batch_dim=0)
@@ -224,6 +223,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
 
                 loss, outputs = samba.to_torch(loss), samba.to_torch(outputs)
 
+                samba.session.end_runtime_profile(MODEL_NAME+'.log')
                 total_loss += loss.mean()
 
                 _, predicted = torch.max(outputs.data, 1)
