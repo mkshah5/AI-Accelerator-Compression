@@ -115,7 +115,7 @@ class CloudMaskBase(nn.Module):
 
 def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--num-classes', type=int, default=10, help='Number of output classes')
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
     parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
