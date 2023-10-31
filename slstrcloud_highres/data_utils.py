@@ -31,11 +31,11 @@ class CloudDataset(torch.utils.data.Dataset):
         return self.dataset_len
     
     def __getitem__(self, index):
-        loaded_data = self.load_data(self.paths[index])
+        loaded_data = self.load_data(self.paths[index],index)
         img, msk = self._preprocess_images(loaded_data[0],loaded_data[1],loaded_data[2])
         return img, msk
     
-    def load_data(self, path):
+    def load_data(self, path,index):
         #path = path.decode()
 
         with h5py.File(path, 'r') as handle:
@@ -51,7 +51,31 @@ class CloudDataset(torch.utils.data.Dataset):
         msk[msk == 0] = 0
         msk = msk.astype(float)
 
-        return (img, msk, path)
+        modded = index%16
+        inds = dict()
+
+        inds[0] = (0,200, 0, 200)
+        inds[1] = (0,200, 200, 400)
+        inds[2] = (0,200, 400, 600)
+        inds[3] = (0,200, 600, 800)
+
+        inds[4] = (200,400, 0, 200)
+        inds[5] = (200,400, 200, 400)
+        inds[6] = (200,400, 400, 600)
+        inds[7] = (200,400, 600, 800)
+
+        inds[8] = (400,600, 0, 200)
+        inds[9] = (400,600, 200, 400)
+        inds[10] = (400,600, 400, 600)
+        inds[11] = (400,600, 600, 800)
+
+        inds[12] = (600,800, 0, 200)
+        inds[13] = (600,800, 200, 400)
+        inds[14] = (600,800, 400, 600)
+        inds[15] = (600,800, 600, 800)
+
+        e0, e1,e2,e3 = inds[modded]
+        return (img[e0:e1, e2:e3], msk[e0:e1, e2:e3], path)
     
     def _preprocess_images(self, img, msk, path):
         # Crop & convert to patches
@@ -62,7 +86,6 @@ class CloudDataset(torch.utils.data.Dataset):
         return torch.from_numpy(img).to(torch.float32), torch.from_numpy(msk).to(torch.float32)
         
     def _transform_image(self, img):
-        img = img[0:800, 0:800]
         
         return img.transpose((2,0,1))
 

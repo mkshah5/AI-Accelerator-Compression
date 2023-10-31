@@ -70,39 +70,6 @@ def full_comp(x):
     out = torch.stack((r,g,b,r1,g1,b1,r2,g2,b2),1)
     return out
 
-# Assume 1024 by 1024 input, 256 by 256 output
-def patchify(x,channels):
-    e0 = 0
-    e1 = 200
-    e2 = 400
-    e3 = 600
-    e4 = 800
-
-    x0 = x[:,:,e0:e1,e0:e1]
-    x1 = x[:,:,e0:e1,e1:e2]
-    x2 = x[:,:,e0:e1,e2:e3]
-    x3 = x[:,:,e0:e1,e3:e4]
-
-    x4 = x[:,:,e1:e2,e0:e1]
-    x5 = x[:,:,e1:e2,e1:e2]
-    x6 = x[:,:,e1:e2,e2:e3]
-    x7 = x[:,:,e1:e2,e3:e4]
-
-    x8 = x[:,:,e2:e3,e0:e1]
-    x9 = x[:,:,e2:e3,e1:e2]
-    x10 = x[:,:,e2:e3,e2:e3]
-    x11 = x[:,:,e2:e3,e3:e4]
-
-    x12 = x[:,:,e3:e4,e0:e1]
-    x13 = x[:,:,e3:e4,e1:e2]
-    x14 = x[:,:,e3:e4,e2:e3]
-    x15 = x[:,:,e3:e4,e3:e4]
-
-    out = torch.cat((x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15),0) 
-
-    out = torch.reshape(out, (TRAIN_SIZE*16, channels, 200,200))
-    print("Patchify shape: "+str(out.shape))
-    return out    
 
 class CloudMaskCompress(nn.Module):
     def __init__(self):
@@ -117,7 +84,6 @@ class CloudMaskCompress(nn.Module):
         self.internal_model = CloudMaskNet((RPIX,CPIX,PARAMS.nchannels))
     # assume bs > 1
     def forward(self, x, gt):
-
         r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
         g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs)
         b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
@@ -129,7 +95,7 @@ class CloudMaskCompress(nn.Module):
         b2 = decompress(torch.squeeze(x[:,8,:,:]), self.lhs,self.rhs)
         o = torch.stack((r,g,b,r1,g1,b1,r2,g2,b2),1)
 
-        o = torch.reshape(o, (TRAIN_SIZE*16, PARAMS.nchannels, RPIX, CPIX))
+        o = torch.reshape(o, (TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX))
         
         out = self.internal_model(o)
         loss = self.criterion(out, gt)
@@ -171,20 +137,19 @@ def add_run_args(parser: argparse.ArgumentParser):
 
 
 def get_inputs_compress(args: argparse.Namespace) -> Tuple[samba.SambaTensor, samba.SambaTensor]:
-    images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, 800, 800)
-    images = patchify(images, PARAMS.nchannels)
+    images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX)
     images = full_comp(images)
     images = samba.from_torch_tensor(images, name='image', batch_dim=0)
+    gt = samba.from_torch_tensor(torch.randn(TRAIN_SIZE, 1, RPIX, CPIX), name='gt', batch_dim=0)
     
-    gt = samba.from_torch_tensor(patchify(torch.randn(TRAIN_SIZE, 1, 800, 800),1), name='gt', batch_dim=0)
-          
+      
     return (images, gt)
 
 def get_inputs_base(args: argparse.Namespace) -> Tuple[samba.SambaTensor, samba.SambaTensor]:
-    images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, 800, 800)
-    images = patchify(images, PARAMS.nchannels)
+    images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX)
     images = samba.from_torch_tensor(images, name='image', batch_dim=0)
-    gt = samba.from_torch_tensor(patchify(torch.randn(TRAIN_SIZE, 1, 800, 800),1), name='gt', batch_dim=0)
+    gt = samba.from_torch_tensor(torch.randn(TRAIN_SIZE, 1, RPIX, CPIX), name='gt', batch_dim=0)
+        
     return (images, gt)
 
 
@@ -198,8 +163,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
             images = torch.mul(images, 255)
-            images = patchify(images, PARAMS.nchannels)
-            labels = patchify(labels, 1)
+            
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
 
@@ -234,8 +198,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: samba.optim.SGD
             for images, labels in test_loader:
                 images = torch.mul(images, 255)
             
-                images = patchify(images, PARAMS.nchannels)
-                labels = patchify(labels, 1)
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
 
