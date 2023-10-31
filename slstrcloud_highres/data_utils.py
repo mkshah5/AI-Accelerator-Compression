@@ -62,7 +62,7 @@ class CloudDataset(torch.utils.data.Dataset):
         return torch.from_numpy(img).to(torch.float32), torch.from_numpy(msk).to(torch.float32)
         
     def _transform_image(self, img):
-        img = img[0:1024, 0:1024]
+        img = img[0:800, 0:800]
         
         return img.transpose((2,0,1))
 
