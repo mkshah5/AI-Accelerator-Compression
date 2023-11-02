@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
-from config import PARAMS
+#from config import PARAMS
 
 class OpticalDamageNetSkeleton(nn.Module):
     """ Define a CNN """
@@ -61,7 +61,7 @@ class OpticalDamageNetSkeleton(nn.Module):
         
         x = self.fc2(x)
 
-        x = torch.reshape(x, (PARAMS.batch_size, self.ld_channels, self.h, self.w))
+        x = torch.reshape(x, (-1, self.ld_channels, self.h, self.w))
         
         x = self.relu(self.dconv1(self.b2_norm_3(x)))
         
