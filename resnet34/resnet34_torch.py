@@ -44,6 +44,7 @@ RBLKS = None
 CBLKS = None
 IS_BASELINE_NETWORK = None
 MODEL_NAME = None
+COMPRESSOR = "dct"
 
 BENCHMARK_NAME = "resnet34"
 VERSION = "torch"
@@ -54,7 +55,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 # Dependent on the number of channels
-def full_comp(x, err=1.1e-1):
+def sz_comp(x, err=1.1e-1):
     fshape = str(TRAIN_SIZE)+" "+str(PARAMS.nchannels)+" "+str(RPIX)+" "+str(CPIX)
     n_x = x.numpy().astype(np.float32)
     n_x.tofile('tmpb.bin')
@@ -68,6 +69,25 @@ def full_comp(x, err=1.1e-1):
     decomp = np.reshape(decomp, (TRAIN_SIZE,PARAMS.nchannels,RPIX,CPIX))
     return torch.from_numpy(decomp)
 
+def dct_comp(x):
+    r = compress(torch.squeeze(x[:,0,:,:]), PARAMS)
+    g = compress(torch.squeeze(x[:,1,:,:]), PARAMS)
+    b = compress(torch.squeeze(x[:,2,:,:]), PARAMS)
+    x = torch.stack((r,g,b),1)
+    lhs, rhs = get_lhs_rhs_decompress(PARAMS)
+    
+    r = decompress(torch.squeeze(x[:,0,:,:]), lhs,rhs)
+    g = decompress(torch.squeeze(x[:,1,:,:]), lhs,rhs)
+    b = decompress(torch.squeeze(x[:,2,:,:]), lhs,rhs)
+    o = torch.stack((r,g,b),1)
+
+    return o.to(torch.float32)
+
+def full_comp(x):
+    if COMPRESSOR=="dct":
+        return dct_comp(torch.mul(x,255))
+    elif COMPRESSOR=="sz":
+        return torch.mul(sz_comp(x),255)
 
 class ResNetCompress(nn.Module):
     def __init__(self):
@@ -98,6 +118,7 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--weight-decay', type=float, default=0.0001)
     parser.add_argument('--device',type=int,default=0)
     parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
+    parser.add_argument('--compressor', type=str,default='dct')
 
 
 def add_run_args(parser: argparse.ArgumentParser):
@@ -157,9 +178,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             labels = labels.cuda()
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
-            
-            
-            images = torch.mul(images, 255)
+                        
             images = images.cuda()
             run_start = time.time()
                     
@@ -188,7 +207,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
            
-                images = torch.mul(images, 255)
                 images = images.cuda()
                 labels = labels.cuda()
 
@@ -208,7 +226,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
     torch.save(model, MODEL_NAME+".pt")
 
 def main():
-    global PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME
+    global COMPRESSOR, PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME
 
     parser = argparse.ArgumentParser()
     add_common_args(parser)
@@ -224,6 +242,8 @@ def main():
     BD = PARAMS.BD
     RBLKS = PARAMS.rblks
     CBLKS = PARAMS.cblks
+    COMPRESSOR = args.compressor
+
 
     IS_BASELINE_NETWORK = PARAMS.is_base
 

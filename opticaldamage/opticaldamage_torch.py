@@ -44,20 +44,19 @@ RBLKS = None
 CBLKS = None
 IS_BASELINE_NETWORK = None
 MODEL_NAME = None
+COMPRESSOR = "dct"
 
 BENCHMARK_NAME = "opticaldamage"
 VERSION = "torch"
-
 
 DATA_DIR = "/home/mkshah5/sciml_bench/datasets/optical_damage_ds1"
 
 COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
-
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 # Dependent on the number of channels
-def full_comp(x, err=2.5e-4):
+def sz_comp(x, err=2.5e-4):
     fshape = str(TRAIN_SIZE)+" "+str(RPIX)+" "+str(CPIX)
     n_x = x.numpy().astype(np.float32)
     n_x.tofile('tmpb.bin')
@@ -71,6 +70,22 @@ def full_comp(x, err=2.5e-4):
     decomp = np.reshape(decomp, (TRAIN_SIZE,PARAMS.nchannels,RPIX,CPIX))
     return torch.from_numpy(decomp)
 
+def dct_comp(x):
+    out = compress(torch.squeeze(x),PARAMS)
+    out = torch.reshape(out, (TRAIN_SIZE, PARAMS.nchannels, out.shape[1], out.shape[2]))
+    
+    lhs, rhs = get_lhs_rhs_decompress(PARAMS)
+    
+    o = decompress(out,lhs,rhs)
+    o = torch.reshape(o, (TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX))
+
+    return o.to(torch.float32)
+
+def full_comp(x):
+    if COMPRESSOR=="dct":
+        return dct_comp(torch.mul(x,255))
+    elif COMPRESSOR=="sz":
+        return torch.mul(sz_comp(x),255)
 
 class OpticalDamageCompress(nn.Module):
     def __init__(self):
@@ -101,7 +116,7 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--weight-decay', type=float, default=0.0001)
     parser.add_argument('--device',type=int,default=0)
     parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
-
+    parser.add_argument('--compressor', type=str,default='dct')
 
 def add_run_args(parser: argparse.ArgumentParser):
     parser.add_argument('--train-torch', action='store_true', help='train FP32 PyTorch version of application')
@@ -135,8 +150,6 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
             
-            
-            images = torch.mul(images, 255)
             images = images.to(torch.float32)
             images = images.cuda()
             run_start = time.time()
@@ -166,11 +179,9 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
                 images = images.to(torch.float32)
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
-                images = torch.mul(images, 255)
                 images.to(device)
                 images = images.cuda()
                 gt = gt.cuda()
-                print(images)
                 outputs = model(images)
                 loss = loss_function(outputs,gt)
                 
@@ -184,7 +195,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
     torch.save(model, MODEL_NAME+".pt")
 
 def main():
-    global PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME
+    global PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME, COMPRESSOR
 
     parser = argparse.ArgumentParser()
     add_common_args(parser)
@@ -202,7 +213,7 @@ def main():
     CBLKS = PARAMS.cblks
 
     IS_BASELINE_NETWORK = PARAMS.is_base
-    
+    COMPRESSOR = args.compressor
 
 
     if IS_BASELINE_NETWORK:
