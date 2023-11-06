@@ -137,6 +137,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             
             
             images = torch.mul(images, 255)
+            images = images.to(torch.float32)
             images = images.cuda()
             run_start = time.time()
                     
@@ -162,12 +163,14 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             total_loss = 0
             for i,(images) in enumerate(test_loader):
                 gt = images.to(torch.float32)
+                images = images.to(torch.float32)
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
                 images = torch.mul(images, 255)
                 images.to(device)
                 images = images.cuda()
                 gt = gt.cuda()
+                print(images)
                 outputs = model(images)
                 loss = loss_function(outputs,gt)
                 
@@ -207,10 +210,12 @@ def main():
     else:
         MODEL_NAME = VERSION+"_matmul_"+BENCHMARK_NAME+"_cf"+str(CF)
     command = "train"
-    device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
+    device = "cuda:1"
     device = torch.device(device)
-
-
+    torch.cuda.set_device(device)
+    print(torch.cuda.device_count())
+    print(torch.cuda.current_device())
+    
     if command == "test":
         model = torch.load(MODEL_NAME+".pt").to(device)
     else:
