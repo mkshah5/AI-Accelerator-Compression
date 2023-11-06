@@ -75,7 +75,9 @@ def dct_comp(x):
     b = compress(torch.squeeze(x[:,2,:,:]), PARAMS)
     x = torch.stack((r,g,b),1)
     lhs, rhs = get_lhs_rhs_decompress(PARAMS)
-    
+    lhs = torch.from_numpy(lhs).to(torch.bfloat16)
+    rhs = torch.from_numpy(rhs).to(torch.bfloat16)
+
     r = decompress(torch.squeeze(x[:,0,:,:]), lhs,rhs)
     g = decompress(torch.squeeze(x[:,1,:,:]), lhs,rhs)
     b = decompress(torch.squeeze(x[:,2,:,:]), lhs,rhs)
@@ -85,9 +87,9 @@ def dct_comp(x):
 
 def full_comp(x):
     if COMPRESSOR=="dct":
-        return dct_comp(torch.mul(x,255))
+        return dct_comp(torch.mul(x,255).to(torch.float32))
     elif COMPRESSOR=="sz":
-        return torch.mul(sz_comp(x),255)
+        return torch.mul(sz_comp(x.to(torch.float32)),255)
 
 class ResNetCompress(nn.Module):
     def __init__(self):
