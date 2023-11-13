@@ -26,7 +26,7 @@ from typing import Type
 import poptorch
 
 from utils.utils import TrainingParams
-from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
+from compressor.compress_entry_f32 import compress, decompress, get_lhs_rhs_decompress
 
 from model import ResNet34
 
@@ -62,15 +62,15 @@ class ResNetCompress(nn.Module):
         self.criterion = nn.CrossEntropyLoss()
         self.decompress = decompress
         lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
-        self.lhs = torch.as_tensor(lhs).to(torch.bfloat16)
-        self.rhs = torch.as_tensor(rhs).to(torch.bfloat16)
+        self.lhs = torch.as_tensor(lhs).to(torch.float32)
+        self.rhs = torch.as_tensor(rhs).to(torch.float32)
 
         self.internal_model = ResNet34()
     # assume bs > 1
     def forward(self, x, labels=None):
-        r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
-        g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs)
-        b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
+        r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs.ipu(),self.rhs.ipu())
+        g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs.ipu(),self.rhs.ipu())
+        b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs.ipu(),self.rhs.ipu())
         out = torch.stack((r,g,b),1)
 
         out = self.internal_model(out)
@@ -99,6 +99,7 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
     parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
+    parser.add_argument('--command',type=str,default='train')
 
 def add_run_args(parser: argparse.ArgumentParser):
     parser.add_argument('--train-torch', action='store_true', help='train FP32 PyTorch version of application')
@@ -139,7 +140,7 @@ def prepare_fulldata(args: argparse.Namespace, opts_t, opts_v) -> Tuple[torch.ut
         shuffle=True,
         drop_last=True
     )
-    valid_loader = DataLoader(
+    valid_loader = poptorch.DataLoader(
         options=opts_v,
         dataset=dataset_valid, 
         batch_size=TEST_SIZE,
@@ -153,24 +154,31 @@ def prepare_fulldata(args: argparse.Namespace, opts_t, opts_v) -> Tuple[torch.ut
 def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.SGD) -> None:
     
     opts_t = poptorch.Options()
-    opts_t.deviceIterations(10)
-
+    opts_t.deviceIterations(1)
+    opts_t.setAvailableMemoryProportion({"IPU0": 0.25});
+    opts_t.Precision.setPartialsType(torch.half)
     opts_v = poptorch.Options()
-    opts_v.deviceIterations(10)
+    opts_v.deviceIterations(1)
+
+    opts_v.setAvailableMemoryProportion({"IPU0": 0.25});
+
+    opts_v.Precision.setPartialsType(torch.half)
 
     train_loader, test_loader = prepare_fulldata(args,opts_t,opts_v)
 
     total_step = len(train_loader)
     
     h_l = nn.CrossEntropyLoss()
+    
+    poptorch_model = poptorch.trainingModel(model,options=opts_t,optimizer=optimizer)
     for epoch in range(args.num_epochs):
-        poptorch_model = poptorch.trainingModel(model,options=opts_t,optimizer=optimizer)
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
+            print(images.shape)
             images = torch.mul(images, 255)
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
-            
+            print(images.shape) 
             run_start = time.time()
             outputs,loss = poptorch_model(images,labels)
             run_end = time.time()
@@ -244,7 +252,7 @@ def main():
         else:
             model = ResNetCompress()
 
-    print(args.mapping)
+    print(args)
 
     optimizer = poptorch.optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
