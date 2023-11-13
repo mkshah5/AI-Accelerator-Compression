@@ -65,23 +65,23 @@ def get_data_generator(base_dataset_dir: Path, batch_size: int, is_inference=Fal
     else:
         opts = opts_t
 
-    params = {
-        'options': opts,
-        'batch_size': batch_size,
-        'shuffle': shuffle_flag,
-        'num_workers': 1,
-        'drop_last': True
-    }
-
     if is_inference: 
         undamaged_path = base_dataset_dir / 'inference' / 'undamaged'
         inference_dataset = OpticalDamageDataset(undamaged_path)
-        inference_generator = poptorch.DataLoader(inference_dataset, **params)
+        inference_generator = poptorch.DataLoader(options=opts,
+                                                  dataset=inference_dataset,
+                                                  batch_size=batch_size,
+                                                  shuffle=shuffle_flag,
+                                                  drop_last=True)
         return  inference_generator
     else: 
         undamaged_path = base_dataset_dir / 'training' / 'undamaged'
         training_dataset = OpticalDamageDataset(undamaged_path)
-        training_generator = poptorch.DataLoader(training_dataset, **params)
+        training_generator = poptorch.DataLoader(options=opts,
+                                                  dataset=training_dataset,
+                                                  batch_size=batch_size,
+                                                  shuffle=shuffle_flag,
+                                                  drop_last=True)
         return  training_generator
 
 
