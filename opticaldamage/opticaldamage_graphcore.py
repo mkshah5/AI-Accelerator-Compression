@@ -52,7 +52,8 @@ DATA_DIR = "/home/shahm/sciml_bench/datasets/optical_damage_ds1"
 
 # Dependent on the number of channels
 def full_comp(x):
-    out = compress(torch.squeeze(x),PARAMS)
+    s = x.shape
+    out = compress(torch.reshape(torch.squeeze(x), (TRAIN_SIZE,s[2],s[3])),PARAMS)
     out = torch.reshape(out, (TRAIN_SIZE, PARAMS.nchannels, out.shape[1], out.shape[2]))
 
     return out
@@ -64,14 +65,11 @@ class OpticalDamageCompress(nn.Module):
 
         self.criterion = nn.MSELoss()
         self.decompress = decompress
-        lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
-        self.lhs = torch.as_tensor(lhs).to(torch.float32)
-        self.rhs = torch.as_tensor(rhs).to(torch.float32)
 
-        self.internal_model = OpticalDamageNet()
+        self.internal_model = OpticalDamageNet((RPIX,CPIX,PARAMS.nchannels))
     # assume bs > 1
-    def forward(self, x, gt=None):
-        o = decompress(x,self.lhs.ipu(),self.rhs.ipu())
+    def forward(self, x, lhs, rhs, gt=None):
+        o = decompress(x,lhs,rhs)
         o = torch.reshape(o, (TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX))
 
         out = self.internal_model(o)
@@ -84,7 +82,7 @@ class OpticalDamageBase(nn.Module):
     def __init__(self):
         super(OpticalDamageBase, self).__init__()
         self.criterion = nn.MSELoss()
-        self.internal_model = OpticalDamageNet()
+        self.internal_model = OpticalDamageNet((RPIX,CPIX,PARAMS.nchannels))
 
     # assume bs > 1
     def forward(self, x, gt=None):
@@ -121,12 +119,12 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
     
     opts_t = poptorch.Options()
     opts_t.deviceIterations(1)
-    opts_t.setAvailableMemoryProportion({"IPU0": 0.5});
+    opts_t.setAvailableMemoryProportion({"IPU0": 0.1});
     opts_t.Precision.setPartialsType(torch.half)
     opts_v = poptorch.Options()
     opts_v.deviceIterations(1)
 
-    opts_v.setAvailableMemoryProportion({"IPU0": 0.5});
+    opts_v.setAvailableMemoryProportion({"IPU0": 0.1});
 
     opts_v.Precision.setPartialsType(torch.half)
 
@@ -137,19 +135,24 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
     
     h_l = nn.MSELoss()
     
+    lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
+    lhs = torch.as_tensor(lhs).to(torch.float32)
+    rhs = torch.as_tensor(rhs).to(torch.float32)
+    
     poptorch_model = poptorch.trainingModel(model,options=opts_t,optimizer=optimizer)
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images) in enumerate(train_loader):
             print(images.shape)
-            images = torch.mul(images, 255)
+            
             gt = images.to(torch.float32)
+            images = torch.mul(images, 255).to(torch.float32)
 
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
             print(images.shape) 
             run_start = time.time()
-            outputs,loss = poptorch_model(images,gt)
+            outputs,loss = poptorch_model(images,lhs,rhs,gt)
             run_end = time.time()
             avg_loss += loss.mean()
             run_time = run_end-run_start
@@ -167,8 +170,9 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
             total = 0
             total_loss = 0
             for images, gt in test_loader:
-                images = torch.mul(images, 255)
+                
                 gt = images.to(torch.float32)
+                images = torch.mul(images, 255)
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
 
