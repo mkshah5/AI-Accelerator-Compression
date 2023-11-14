@@ -30,7 +30,7 @@ from utils.utils import TrainingParams
 from compressor.compress_entry_f32 import compress, decompress, get_lhs_rhs_decompress
 from data_utils_graphcore import get_data_generator
 
-from model import EMDenoiseNet
+from model_gc import EMDenoiseNet
 
 PARAMS = None
 TRAIN_SIZE = None
@@ -143,13 +143,13 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
-            print(images.shape)
+            #print(images.shape)
             
             images = torch.mul(images, 255).to(torch.float32)
 
             images = torch.permute(images, (0, 3, 1, 2))
             labels = torch.permute(labels, (0, 3, 1, 2)).to(torch.float32)
-
+            
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
             print(images.shape)
