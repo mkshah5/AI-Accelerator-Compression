@@ -51,15 +51,15 @@ VERSION = "graphcore"
 # Dependent on the number of channels
 def full_comp(x):
     s = x.shape
-    r = compress(torch.reshape(torch.squeeze(x[:,0,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    g = compress(torch.reshape(torch.squeeze(x[:,1,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    b = compress(torch.reshape(torch.squeeze(x[:,2,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    r1 = compress(torch.reshape(torch.squeeze(x[:,3,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    g1 = compress(torch.reshape(torch.squeeze(x[:,4,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    b1 = compress(torch.reshape(torch.squeeze(x[:,5,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    r2 = compress(torch.reshape(torch.squeeze(x[:,6,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    g2 = compress(torch.reshape(torch.squeeze(x[:,7,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
-    b2 = compress(torch.reshape(torch.squeeze(x[:,8,:,:], (TRAIN_SIZE,s[2],s[3]))),PARAMS)
+    r = compress(torch.reshape(torch.squeeze(x[:,0,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    g = compress(torch.reshape(torch.squeeze(x[:,1,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    b = compress(torch.reshape(torch.squeeze(x[:,2,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    r1 = compress(torch.reshape(torch.squeeze(x[:,3,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    g1 = compress(torch.reshape(torch.squeeze(x[:,4,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    b1 = compress(torch.reshape(torch.squeeze(x[:,5,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    r2 = compress(torch.reshape(torch.squeeze(x[:,6,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    g2 = compress(torch.reshape(torch.squeeze(x[:,7,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
+    b2 = compress(torch.reshape(torch.squeeze(x[:,8,:,:]), (TRAIN_SIZE,s[2],s[3])),PARAMS)
 
     out = torch.stack((r,g,b,r1,g1,b1,r2,g2,b2),1)
     return out
@@ -76,19 +76,19 @@ class CloudMaskCompress(nn.Module):
     # assume bs > 1
     def forward(self, x, lhs, rhs, gt=None):
         s = x.shape
-        r = decompress(torch.reshape(torch.squeeze(x[:,0,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        g = decompress(torch.reshape(torch.squeeze(x[:,1,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        b = decompress(torch.reshape(torch.squeeze(x[:,2,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        r1 = decompress(torch.reshape(torch.squeeze(x[:,3,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        g1 = decompress(torch.reshape(torch.squeeze(x[:,4,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        b1 = decompress(torch.reshape(torch.squeeze(x[:,5,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        r2 = decompress(torch.reshape(torch.squeeze(x[:,6,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        g2 = decompress(torch.reshape(torch.squeeze(x[:,7,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
-        b2 = decompress(torch.reshape(torch.squeeze(x[:,8,:,:], (TRAIN_SIZE,s[2],s[3]))), lhs,rhs)
+        r = decompress(torch.reshape(torch.squeeze(x[:,0,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        g = decompress(torch.reshape(torch.squeeze(x[:,1,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        b = decompress(torch.reshape(torch.squeeze(x[:,2,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        r1 = decompress(torch.reshape(torch.squeeze(x[:,3,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        g1 = decompress(torch.reshape(torch.squeeze(x[:,4,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        b1 = decompress(torch.reshape(torch.squeeze(x[:,5,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        r2 = decompress(torch.reshape(torch.squeeze(x[:,6,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        g2 = decompress(torch.reshape(torch.squeeze(x[:,7,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
+        b2 = decompress(torch.reshape(torch.squeeze(x[:,8,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
         o = torch.stack((r,g,b,r1,g1,b1,r2,g2,b2),1)
-
+        
         o = torch.reshape(o, (TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX))
-
+        print(o.shape)
         out = self.internal_model(o)
         if self.training:
             loss = self.criterion(out, gt)
@@ -159,7 +159,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
-            #print(images.shape)
+            print(images.shape)
             
             images = torch.mul(images, 255).to(torch.float32)
             labels = labels.to(torch.float32)
@@ -233,9 +233,9 @@ def main():
         model = torch.load(MODEL_NAME+".pt")
     else:
         if IS_BASELINE_NETWORK:
-            model = EMDenoiseBase()
+            model = CloudMaskBase()
         else:
-            model = EMDenoiseCompress()
+            model = CloudMaskCompress()
 
     print(args)
 
