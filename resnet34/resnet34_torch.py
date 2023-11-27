@@ -221,10 +221,10 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             correct = 0
             total = 0
             total_loss = 0
-            for images, labels in test_loader:
-            
+            for i,(images, labels) in enumerate(test_loader):
+                 
                 if not IS_BASELINE_NETWORK:
-                    images = full_comp(images)
+                    images, size = full_comp(images)
            
                 images = images.cuda()
                 labels = labels.cuda()
@@ -239,7 +239,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
                 correct += (predicted == labels).sum()
 
             test_acc = 100.0 * correct / total
-            stats.add_stat("test_accuracy", test_acc)
+            stats.add_stat("test_accuracy", test_acc.item())
             stats.add_stat("test_loss", total_loss.item()/test_steps)
             print('Test Accuracy: {:.2f}'.format(test_acc),
                   ' Loss: {:.4f}'.format(total_loss.item() / (len(test_loader))))
@@ -272,7 +272,7 @@ def main():
     if IS_BASELINE_NETWORK:
         MODEL_NAME = VERSION+"_base_"+BENCHMARK_NAME
     else:
-        MODEL_NAME = VERSION+"_matmul_"+BENCHMARK_NAME+"_cf"+str(CF)
+        MODEL_NAME = VERSION+"_"+COMPRESSOR+"_"+BENCHMARK_NAME+"_cf"+str(CF)
     command = "train"
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
