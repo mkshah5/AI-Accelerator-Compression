@@ -32,6 +32,8 @@ from utils.utils import TrainingParams
 from compressor.compress_entry import compress, decompress, get_lhs_rhs_decompress
 from model import OpticalDamageNet
 from data_utils import get_data_generator
+from utils.gpu_stats import GPUStats
+
 
 PARAMS = None
 TRAIN_SIZE = None
@@ -68,7 +70,7 @@ def sz_comp(x, err=2.5e-4):
     os.system(d_command)
     decomp = np.fromfile('tmpb.bin.sz.out',dtype=np.float32)
     decomp = np.reshape(decomp, (TRAIN_SIZE,PARAMS.nchannels,RPIX,CPIX))
-    return torch.from_numpy(decomp)
+    return torch.from_numpy(decomp), os.stat('tmpb.bin.sz').st_size
 
 def dct_comp(x):
     out = compress(torch.squeeze(x),PARAMS)
@@ -81,13 +83,15 @@ def dct_comp(x):
     o = decompress(out,lhs,rhs)
     o = torch.reshape(o, (TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX))
 
-    return o.to(torch.float32)
+    return o.to(torch.float32), out.element_size() * out.nelement()
 
 def full_comp(x):
     if COMPRESSOR=="dct":
-        return dct_comp(torch.mul(x,255).to(torch.float32))
+        c_res, size = dct_comp(torch.mul(x,255).to(torch.float32))
+        return c_res, size
     elif COMPRESSOR=="sz":
-        return torch.mul(sz_comp(x.to(torch.float32)),255)
+        c_res, size = sz_comp(x.to(torch.float32))
+        return torch.mul(c_res,255),size
 
 class OpticalDamageCompress(nn.Module):
     def __init__(self):
@@ -136,6 +140,7 @@ def add_run_args(parser: argparse.ArgumentParser):
 
 
 def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
+    stats = GPUStats(MODEL_NAME)
     train_loader = get_data_generator(Path(DATA_DIR), TRAIN_SIZE, is_inference=False)
     test_loader = get_data_generator(Path(DATA_DIR), TRAIN_SIZE, is_inference=True)
     loss_function = nn.MSELoss()
@@ -146,15 +151,21 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
     total_step = len(train_loader)
     for epoch in range(args.num_epochs):
         avg_loss = 0
+        avg_step_time = 0.0
+        avg_osize = 0.0
+        avg_csize = 0.0
         for i, (images) in enumerate(train_loader):
+            avg_osize += images.element_size() * images.nelement()
             gt = images.to(torch.float32)
-            gt = gt.cuda()
+            
             if not IS_BASELINE_NETWORK:
-                images = full_comp(images)
+                images,size = full_comp(images)
+                avg_csize += size
             #print(images.shape) 
             images = images.to(torch.float32)
-            images = images.cuda()
             run_start = time.time()
+            images = images.cuda()
+            gt = gt.cuda()
                     
             outputs = model(images)
             
@@ -167,11 +178,18 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             run_end = time.time()
             avg_loss += loss.mean()
             run_time = run_end-run_start
+            avg_step_time += run_time
             print("===Timing===")
             print("Step Run Time (s): "+str(run_time))
             print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(epoch + 1, args.num_epochs, i + 1, total_step,
                                                                      avg_loss / (i + 1)))
+        stats.add_stat("train_loss", avg_loss.item()/total_step)
+        stats.add_stat("avg_step_time", avg_step_time/total_step)
+        stats.add_stat("original_size_bytes", avg_osize/total_step)
+        stats.add_stat("compressed_size_bytes", avg_csize/total_step)
+
         test_acc = 0.0
+        test_steps = len(test_loader)
         with torch.no_grad():
             correct = 0
             total = 0
@@ -180,7 +198,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
                 gt = images.to(torch.float32)
                 images = images.to(torch.float32)
                 if not IS_BASELINE_NETWORK:
-                    images = full_comp(images)
+                    images,size = full_comp(images)
                 images.to(device)
                 images = images.cuda()
                 gt = gt.cuda()
@@ -191,9 +209,11 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
 
 
             #test_acc = 100.0 * correct / total
+            stats.add_stat("test_loss", total_loss.item()/test_steps)
             print('Test Accuracy: {:.2f}'.format(test_acc),
                   ' Loss: {:.4f}'.format(total_loss.item() / (len(test_loader))))
-    
+        stats.register_epoch_row_and_update()
+    stats.save_df()    
     torch.save(model, MODEL_NAME+".pt")
 
 def main():
