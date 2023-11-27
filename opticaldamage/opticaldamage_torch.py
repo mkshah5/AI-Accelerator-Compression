@@ -151,7 +151,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
             gt = gt.cuda()
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
-            
+            #print(images.shape) 
             images = images.to(torch.float32)
             images = images.cuda()
             run_start = time.time()
@@ -226,8 +226,6 @@ def main():
     device = "cuda:1"
     device = torch.device(device)
     torch.cuda.set_device(device)
-    print(torch.cuda.device_count())
-    print(torch.cuda.current_device())
     
     if command == "test":
         model = torch.load(MODEL_NAME+".pt").to(device)
