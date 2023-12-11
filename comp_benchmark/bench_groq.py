@@ -18,15 +18,16 @@ from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 from torch import Tensor
 from typing import Type
 
-import poptorch
+from groqflow import groqit
 
 from utils.utils import TrainingParams
 from compressor.compress_entry_f32 import compress, decompress, get_lhs_rhs_decompress
+
 
 PARAMS = None
 TRAIN_SIZE = None
@@ -41,7 +42,7 @@ IS_BASELINE_NETWORK = None
 MODEL_NAME = None
 
 BENCHMARK_NAME = "standalone"
-VERSION = "graphcore"
+VERSION = "groq"
 
 # Dependent on the number of channels
 def full_comp(x):
@@ -64,13 +65,14 @@ class CompressorModel(nn.Module):
 
     # assume bs > 1
     def forward(self, x):
-        r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs.ipu(),self.rhs.ipu())
-        g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs.ipu(),self.rhs.ipu())
-        b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs.ipu(),self.rhs.ipu())
+        r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
+        g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs)
+        b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
         out = torch.stack((r,g,b),1)
 
+        #out = self.internal_model(out)
+
         return out
-    
 
 def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--num-classes', type=int, default=10, help='Number of output classes')
@@ -78,7 +80,7 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
     parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
-    parser.add_argument('--command',type=str,default='train')
+    parser.add_argument('--command',type=str,default="full_pass")
 
 def add_run_args(parser: argparse.ArgumentParser):
     parser.add_argument('--train-torch', action='store_true', help='train FP32 PyTorch version of application')
@@ -95,51 +97,14 @@ def add_run_args(parser: argparse.ArgumentParser):
                         help="The folder to download the MNIST dataset to.")
 
 
-def prepare_fulldata(args: argparse.Namespace, opts_t) -> Tuple[torch.utils.data.DataLoader]:
-
-    features = torch.randn([10000, PARAMS.nchannels, RPIX, CPIX])
-    dataset = torch.utils.data.TensorDataset(features)
-    # Create data loaders.
-
-    train_loader = poptorch.DataLoader(
-        options = opts_t,
-        dataset=dataset, 
-        batch_size=TRAIN_SIZE,
-        shuffle=True,
-        drop_last=True
-    )
+def get_inputs_compress():
+    images = torch.randn(TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX)
+    images = full_comp(images)
+  
+    return images
 
 
-    return train_loader
 
-
-def train(args: argparse.Namespace, model: nn.Module) -> None:
-    
-    opts_t = poptorch.Options()
-    opts_t.deviceIterations(1)
-    opts_t.setAvailableMemoryProportion({"IPU0": 0.25});
-    opts_t.Precision.setPartialsType(torch.half)
-
-    train_loader = prepare_fulldata(args,opts_t)
-
-    model = model.eval()
-    poptorch_model_inf = poptorch.inferenceModel(model, options=opts_t)
-    with torch.no_grad():
-        i = 0
-        for images in train_loader:
-            images = torch.mul(images, 255)
-        
-            if not IS_BASELINE_NETWORK:
-                images = full_comp(images)
-            s1 = time.time()
-            outputs = poptorch_model_inf(images)
-            s2 = time.time()
-            print("Step: "+str(i)+", Time(s): "+str(s2-s1))
-
-            i+=1
-
-
-    poptorch_model_inf.detachFromDevice()
 
 def main():
     global PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME
@@ -149,7 +114,6 @@ def main():
     add_run_args(parser)
     args = parser.parse_args()
     PARAMS = TrainingParams(args.config_path)
-
     TRAIN_SIZE = PARAMS.batch_size
     TEST_SIZE = PARAMS.batch_size
     CF = PARAMS.cf
@@ -162,15 +126,26 @@ def main():
 
     IS_BASELINE_NETWORK = PARAMS.is_base
 
+    if IS_BASELINE_NETWORK:
+        MODEL_NAME = VERSION+"_base_"+BENCHMARK_NAME
+    else:
+        MODEL_NAME = VERSION+"_dct_"+BENCHMARK_NAME+"_cf"+str(CF)
 
-    MODEL_NAME = VERSION+"_dct_"+BENCHMARK_NAME+"_cf"+str(CF)
     
+    inputs = get_inputs_compress()
+
     model = CompressorModel()
 
-    print(args)
+    inputs = {"x": inputs}
+    
+    groq_model = groqit(model, inputs, build_name=MODEL_NAME)
 
+    for i in range(10):
+        s1 = time.time() 
+        out = groq_model(**inputs)
+        s2 = time.time()
+        print("Step: "+str(0)+", Time(s): "+str(s2-s1))
 
-    train(args, model)
 
 
 if __name__ == '__main__':

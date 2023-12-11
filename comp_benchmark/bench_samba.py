@@ -18,7 +18,7 @@ from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 from torch import Tensor
 from typing import Type
@@ -68,14 +68,15 @@ class CompressorModel(nn.Module):
         lhs, rhs = get_lhs_rhs_decompress(PARAMS)
         self.lhs = torch.from_numpy(lhs).to(torch.bfloat16)
         self.rhs = torch.from_numpy(rhs).to(torch.bfloat16)
-        
+        self.lin = nn.Linear(3*RPIX*CPIX, 1)        
     # assume bs > 1
     def forward(self, x):
         r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
         g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs)
         b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
         out = torch.stack((r,g,b),1)
-        return out
+        out = torch.reshape(out,(TRAIN_SIZE,-1))
+        return self.lin(out)
 
 
 def add_common_args(parser: argparse.ArgumentParser):
@@ -145,17 +146,17 @@ def main():
     elif args.command == "run":
         #Run Lenet
         utils.trace_graph(model, inputs, optimizer, pef=args.pef, mapping=args.mapping)
-        
-        for i in args.num_iterations:
+        for i in range(10):
             samba.session.start_runtime_profile()
             s1 = time.time()
             outputs = samba.session.run(input_tensors=[inputs],
                                             output_tensors=model.output_tensors,
                                             section_types=["FWD"])
+            o = samba.to_torch(outputs[0])
             s2 = time.time()
             samba.session.end_runtime_profile(MODEL_NAME+'.log')
             print("Step: "+str(i)+", Time(s): "+str(s2-s1))
-
+            print(o)
 
 
 if __name__ == '__main__':
