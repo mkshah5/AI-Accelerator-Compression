@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from compressor.dct_funcs import *
-from compress_entry import *
+#from compress_entry import *
 from utils.utils import TrainingParams
 
 def get_lhs_rhs_compress(params: TrainingParams):
@@ -43,7 +43,7 @@ def compress_sfactor1(A, params: TrainingParams):
     return o
 
 def get_new_params(sfactor, params: TrainingParams):
-    newParams = TrainingParams()
+    newParams = TrainingParams('')
     newParams.batch_size = params.batch_size
     newParams.cf = params.cf
     newParams.rpix = int(params.rpix/sfactor)
@@ -109,6 +109,8 @@ def decompress_sfactor(A, lhs, rhs, newrblks, newcblks, rpix, cpix,cf):
     o = torch.add(torch.matmul(lhs, torch.matmul(A, rhs)),128).to(torch.float32)
 
     return torch.reshape(o, (-1, rpix, cpix))
+
+#    return o
 
 def decompress_sfactor_2(A, lhs, rhs, rpix, cpix):
     A1 = torch.squeeze(A[:,0,:,:])
