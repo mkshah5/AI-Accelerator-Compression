@@ -61,16 +61,16 @@ class CompressorModel(nn.Module):
         lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
         self.lhs = torch.as_tensor(lhs).to(torch.float32)
         self.rhs = torch.as_tensor(rhs).to(torch.float32)
-        self.idx = torch.as_tensor(get_idx_array(PARAMS)).to(torch.int32)
+        self.idx = torch.as_tensor(get_idx_array(PARAMS)).to(torch.int64)
         self.cf_nrows = int(RBLKS*CF)
         self.cf_ncols = int(CBLKS*CF)
     # assume bs > 1
     def forward(self, x):
         # decompress(A, lhs, rhs,idx, cf_nrows, cf_ncols)
 
-        r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
-        g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
-        b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
+        r = decompress(torch.squeeze(x[:,0,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
+        g = decompress(torch.squeeze(x[:,1,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
+        b = decompress(torch.squeeze(x[:,2,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
         out = torch.stack((r,g,b),1)
 
         return out
@@ -140,7 +140,7 @@ def train(args: argparse.Namespace, model: nn.Module) -> None:
             outputs = poptorch_model_inf(images)
             s2 = time.time()
             print("Step: "+str(i)+", Time(s): "+str(s2-s1))
-
+            
             i+=1
 
 
@@ -168,7 +168,7 @@ def main():
     IS_BASELINE_NETWORK = PARAMS.is_base
 
 
-    MODEL_NAME = VERSION+"_dct_"+BENCHMARK_NAME+"_cf"+str(CF)
+    MODEL_NAME = VERSION+"_dctopt_"+BENCHMARK_NAME+"_cf"+str(CF)
     
     model = CompressorModel()
 

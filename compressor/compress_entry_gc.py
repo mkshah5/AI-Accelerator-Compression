@@ -41,20 +41,20 @@ def get_idx_array(params: TrainingParams):
     ncols = cblks*cf
     idx = []
 
-    for i in range(rblks):
+    for i in range(int(rblks)):
         blk_row_id = i
-        for j in range(cblks):
+        for j in range(int(cblks)):
             blk_col_id = j
             b_start = cf*blk_row_id*ncols + cf*blk_col_id
-            for k in range(cf):
+            for k in range(int(cf)):
                 t = cf-k
-                for w in range(cf):
+                for w in range(int(cf)):
                     if w < t:
                         x = b_start + k*ncols+w
                         idx.append(x)
     
     t_idx = []    
-    for i in range(bs):
+    for i in range(int(bs)):
         t_idx.extend(idx)
     idx = np.asarray(t_idx)
     idx = np.reshape(idx, (bs,-1))
@@ -62,7 +62,7 @@ def get_idx_array(params: TrainingParams):
 
 def apply_diagonal_fold(A, params: TrainingParams):
     ### retrieve index array for use in extracting values
-    idx = torch.from_numpy(get_idx_array(params))
+    idx = torch.from_numpy(get_idx_array(params)).to(torch.int64)
     values = torch.gather(torch.reshape(A, (params.batch_size,-1)), 1, idx)
     return values
     
