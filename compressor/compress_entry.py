@@ -40,6 +40,15 @@ def compress(A, params: TrainingParams):
     o = torch.add(torch.matmul(lhs, torch.matmul(A, rhs)), 0.5).to(torch.int32).to(torch.bfloat16)
 
     return o
+
+def compress_on_device(A, lhs, rhs):
+    # Same compression algorithm, except require lhs and rhs arguments to be passed in such that
+    # these arrays can be allocated properly in device memory
+    A = torch.subtract(A,128)
+
+    o = torch.add(torch.matmul(lhs, torch.matmul(A, rhs)), 0.5).to(torch.int32).to(torch.bfloat16)
+
+    return o
     
 def decompress(A, lhs, rhs):
     return torch.add(torch.matmul(lhs, torch.matmul(A, rhs)),128).to(torch.bfloat16)
