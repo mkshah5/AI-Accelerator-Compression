@@ -50,6 +50,7 @@ def full_comp(x):
     r = compress_sfactor(torch.squeeze(x[:,0,:,:]), PARAMS, SFACTOR)
     g = compress_sfactor(torch.squeeze(x[:,1,:,:]), PARAMS, SFACTOR)
     b = compress_sfactor(torch.squeeze(x[:,2,:,:]), PARAMS, SFACTOR)
+    #print(r.shape)
     out = torch.stack((r,g,b),1)
 
     return out
@@ -70,13 +71,14 @@ class CompressorModel(nn.Module):
     def forward(self, x):
         # decompress_sfactor(A, lhs, rhs, newrblks, newcblks, rpix, cpix,cf)
         
-        r = self.decompress(torch.squeeze(x[:,0,:,:]), self.lhs.ipu(),self.rhs.ipu(),self.newrblks, self.newcblks, RPIX, CPIX, CF)
-        g = self.decompress(torch.squeeze(x[:,1,:,:]), self.lhs.ipu(),self.rhs.ipu(),self.newrblks, self.newcblks, RPIX, CPIX, CF)
-        b = self.decompress(torch.squeeze(x[:,2,:,:]), self.lhs.ipu(),self.rhs.ipu(),self.newrblks, self.newcblks, RPIX, CPIX, CF)
+        r = self.decompress(torch.squeeze(x[:,0,:,:]), self.lhs.ipu(),self.rhs.ipu(),self.newrblks,self.newcblks, RPIX, CPIX,CF)
+        g = self.decompress(torch.squeeze(x[:,1,:,:]), self.lhs.ipu(),self.rhs.ipu(), self.newrblks,self.newcblks,RPIX, CPIX, CF)
+        b = self.decompress(torch.squeeze(x[:,2,:,:]), self.lhs.ipu(),self.rhs.ipu(), self.newrblks,self.newcblks,RPIX, CPIX,CF)
         out = torch.stack((r,g,b),1)
 
-        return out
+        #return out[0,0,:,:]
     
+        return torch.sum(out,dim=[2,3])
 
 def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--num-classes', type=int, default=10, help='Number of output classes')
@@ -103,7 +105,7 @@ def add_run_args(parser: argparse.ArgumentParser):
 
 def prepare_fulldata(args: argparse.Namespace, opts_t) -> Tuple[torch.utils.data.DataLoader]:
 
-    features = torch.randn([1000, PARAMS.nchannels, RPIX, CPIX])
+    features = torch.randn([10*TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX])
     dataset = torch.utils.data.TensorDataset(features)
     # Create data loaders.
 
@@ -141,6 +143,7 @@ def train(args: argparse.Namespace, model: nn.Module) -> None:
             s1 = time.time()
             outputs = poptorch_model_inf(images)
             s2 = time.time()
+            print(outputs.shape)
             print("Step: "+str(i)+", Time(s): "+str(s2-s1))
 
             i+=1

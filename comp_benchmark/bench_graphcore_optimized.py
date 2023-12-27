@@ -73,7 +73,8 @@ class CompressorModel(nn.Module):
         b = decompress(torch.squeeze(x[:,2,:]), self.lhs.ipu(),self.rhs.ipu(), self.idx.ipu(),self.cf_nrows,self.cf_ncols)
         out = torch.stack((r,g,b),1)
 
-        return out
+        return torch.sum(out,dim=[2,3])
+        #return out
     
 
 def add_common_args(parser: argparse.ArgumentParser):
@@ -101,7 +102,7 @@ def add_run_args(parser: argparse.ArgumentParser):
 
 def prepare_fulldata(args: argparse.Namespace, opts_t) -> Tuple[torch.utils.data.DataLoader]:
 
-    features = torch.randn([1000, PARAMS.nchannels, RPIX, CPIX])
+    features = torch.randn([10*TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX])
     dataset = torch.utils.data.TensorDataset(features)
     # Create data loaders.
 
