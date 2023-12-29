@@ -40,7 +40,7 @@ IS_BASELINE_NETWORK = None
 MODEL_NAME = None
 
 BENCHMARK_NAME = "standalone"
-VERSION = "groq"
+VERSION = "cerebras"
 
 # Dependent on the number of channels
 def full_comp(x):
@@ -57,31 +57,35 @@ class CompressorModel(nn.Module):
         super(CompressorModel, self).__init__()
         cparams = params["cparams"]
         self.decompress = decompress
-        lhs, rhs = get_lhs_rhs_decompress(cparams)        
-        self.lhs = torch.as_tensor(lhs).to(torch.float32)
-        self.rhs = torch.as_tensor(rhs).to(torch.float32)
 
     # assume bs > 1
-    def forward(self, x):
-        r = decompress(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
-        g = decompress(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs)
-        b = decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
+    def forward(self, inputs):
+        x,labels,lhs,rhs = inputs
+        lhs = torch.squeeze(lhs[0,:,:])
+        rhs = torch.squeeze(rhs[0,:,:])
+        r = decompress(torch.squeeze(x[:,0,:,:]), lhs,rhs)
+        g = decompress(torch.squeeze(x[:,1,:,:]), lhs,rhs)
+        b = decompress(torch.squeeze(x[:,2,:,:]), lhs,rhs)
         out = torch.stack((r,g,b),1)
 
-        return out
+        return torch.sum(out)
     
 def main():
     params = get_params_from_args()
     from cerebras_utils import set_defaults
 
     set_defaults(params)
-    params["cparams"] = TrainingParams("./config-ch4.txt")
-
+    cfs = [4,7]
 
     from modelzoo.common.pytorch.run_utils import main
     from modelzoo.fc_mnist.pytorch.data import (
         get_train_dataloader,
     )
+    ver = os.getenv('DCT_COMP_CONFIG')
+    print(ver)
+    params["cparams"] = TrainingParams(ver)
+
+
 
     main(params, CompressorModel, get_train_dataloader, get_train_dataloader)
 

@@ -33,6 +33,21 @@ def full_comp(x, params):
 
     return out
 
+class CustDataset(torch.utils.data.Dataset):
+    def __init__(self, cparams, nshape):
+        self.bs = cparams.batch_size
+        self.count = 100*self.bs
+        self.params = cparams
+        self.nshape = nshape
+    def __len__(self):
+        return self.count
+    def __getitem__(self,idx):
+
+        x = torch.randn(self.nshape)
+        lhs, rhs = get_lhs_rhs_decompress(self.params)        
+        lhs = torch.as_tensor(lhs).to(torch.float32)
+        rhs = torch.as_tensor(rhs).to(torch.float32)
+        return x, 0, lhs, rhs 
 def get_train_dataloader(params):
     """
     :param <dict> params: dict containing input parameters for creating dataset.
@@ -62,18 +77,9 @@ def get_train_dataloader(params):
                 f"vanilla PyTorch CPU workflow. Using float32 instead."
             )
 
-    x = torch.randn(cparams.batch_size, cparams.nchannels, cparams.rpix, cparams.cpix, dtype=dtype)
+    x = torch.randn(2, cparams.nchannels, cparams.rpix, cparams.cpix, dtype=torch.float32)
     x = full_comp(x, cparams)
-
-    num_streamers = dist.num_streamers() if dist.is_streamer() else 1
-    train_loader = SampleGenerator(
-        data=(
-            x,
-            torch.zeros(
-                cparams.batch_size, dtype=torch.int32 if use_cs else torch.int64
-            ),
-        ),
-        sample_count=60000 // batch_size // num_streamers,
-    )
-   
+    dset = CustDataset(cparams, torch.squeeze(x[0,:,:,:]).shape)
+    train_loader = torch.utils.data.DataLoader(dset,batch_size=cparams.batch_size, drop_last=True,shuffle=True)
+    print(train_loader.batch_size)
     return train_loader
