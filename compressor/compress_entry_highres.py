@@ -71,6 +71,21 @@ def compress_sfactor(A, params: TrainingParams,sfactor=1):
     o = torch.reshape(o, (newparams.batch_size, int(params.rblks*params.cf),int(params.cblks*params.cf)))
     return o
 
+def compress_sfactor_bfloat16(A, params: TrainingParams,sfactor=1):
+    
+    newparams = get_new_params(sfactor, params)
+
+    lhs, rhs = get_lhs_rhs_compress(newparams)
+
+    rhs = torch.as_tensor(rhs).to(torch.bfloat16)
+    lhs = torch.as_tensor(lhs).to(torch.bfloat16)
+    A = torch.reshape(A, (-1, newparams.rpix, newparams.cpix))
+    A = torch.subtract(A,128)
+
+    o = torch.add(torch.matmul(lhs, torch.matmul(A, rhs)), 0.5).to(torch.int32).to(torch.bfloat16)
+    o = torch.reshape(o, (newparams.batch_size, int(params.rblks*params.cf),int(params.cblks*params.cf)))
+    return o
+
 def compress_sfactor_2(A, params: TrainingParams):
     newparams = get_new_params(2, params)
 
@@ -107,6 +122,12 @@ def decompress(A, lhs, rhs):
 def decompress_sfactor(A, lhs, rhs, newrblks, newcblks, rpix, cpix,cf):
     A = torch.reshape(A, (-1,int(newrblks*cf),int(newcblks*cf)))
     o = torch.add(torch.matmul(lhs, torch.matmul(A, rhs)),128).to(torch.float32)
+
+    return torch.reshape(o, (-1, rpix, cpix))
+
+def decompress_sfactor_bfloat16(A, lhs, rhs, newrblks, newcblks, rpix, cpix,cf):
+    A = torch.reshape(A, (-1,int(newrblks*cf),int(newcblks*cf)))
+    o = torch.add(torch.matmul(lhs, torch.matmul(A, rhs)),128).to(torch.bfloat16)
 
     return torch.reshape(o, (-1, rpix, cpix))
 
