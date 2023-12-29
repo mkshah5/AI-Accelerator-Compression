@@ -69,7 +69,7 @@ class CompressorModel(nn.Module):
         super(CompressorModel, self).__init__()
 
 
-        self.lin = nn.Linear(3*RPIX*CPIX, 1)
+        self.lin = nn.Linear(3*32*32, 1)
         self.decompress = decompress_sfactor_bfloat16
         newparams = get_new_params(SFACTOR, PARAMS)
         lhs, rhs = get_lhs_rhs_decompress(newparams)        
@@ -83,7 +83,7 @@ class CompressorModel(nn.Module):
         g = self.decompress(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs,self.newrblks,self.newcblks, RPIX, CPIX,CF)
         b = self.decompress(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs,self.newrblks,self.newcblks, RPIX, CPIX,CF)
         out = torch.stack((r,g,b),1)
-        out = torch.reshape(out,(TRAIN_SIZE,-1))
+        out = torch.reshape(out,(-1,3*32*32))
         return self.lin(out)
 
 
