@@ -68,16 +68,16 @@ class CompressorModel(nn.Module):
         lhs, rhs = get_lhs_rhs_compress(PARAMS)
         self.lhs = samba.from_torch_tensor(torch.from_numpy(lhs).to(torch.bfloat16),name='lhs')
         self.rhs = samba.from_torch_tensor(torch.from_numpy(rhs).to(torch.bfloat16),name='rhs')
-        self.lin = nn.Linear(3*32*32, 1)        
+        self.lin = nn.Linear(3*2*2, 1)        
     # assume bs > 1
     def forward(self, x):
         r = compress_on_device(torch.squeeze(x[:,0,:,:]), self.lhs,self.rhs)
         g = compress_on_device(torch.squeeze(x[:,1,:,:]), self.lhs,self.rhs)
         b = compress_on_device(torch.squeeze(x[:,2,:,:]), self.lhs,self.rhs)
         out = torch.stack((r,g,b),1)
-        # out = torch.reshape(out,(-1,3*32*32))
-        # return self.lin(out)
-        return torch.sum(out,dim=[2,3])
+        out = torch.reshape(out,(-1,3*2*2))
+        return self.lin(out)
+        #return torch.sum(out,dim=[2,3])
 
 def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--num-classes', type=int, default=10, help='Number of output classes')
