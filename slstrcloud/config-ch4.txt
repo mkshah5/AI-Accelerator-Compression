@@ -1,8 +1,8 @@
 {
 "batch_size" : 4,
 "chop_factor": 4,
-"rpixels" : 320,
-"cpixels" : 320,
+"rpixels" : 128,
+"cpixels" : 128,
 "nchannels": 9,
 "is_base" : false
 }

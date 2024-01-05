@@ -86,9 +86,8 @@ class CloudMaskCompress(nn.Module):
         g2 = decompress(torch.reshape(torch.squeeze(x[:,7,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
         b2 = decompress(torch.reshape(torch.squeeze(x[:,8,:,:]), (TRAIN_SIZE,s[2],s[3])), lhs,rhs)
         o = torch.stack((r,g,b,r1,g1,b1,r2,g2,b2),1)
-        
+     
         o = torch.reshape(o, (TRAIN_SIZE, PARAMS.nchannels, RPIX, CPIX))
-        print(o.shape)
         out = self.internal_model(o)
         if self.training:
             loss = self.criterion(out, gt)
@@ -150,7 +149,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
     total_step = len(train_loader)
     
     h_l = nn.BCELoss()
-    
+    sig = torch.nn.Sigmoid()
     lhs, rhs = get_lhs_rhs_decompress(PARAMS)        
     lhs = torch.as_tensor(lhs).to(torch.float32)
     rhs = torch.as_tensor(rhs).to(torch.float32)
@@ -159,16 +158,19 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
     for epoch in range(args.num_epochs):
         avg_loss = 0
         for i, (images, labels) in enumerate(train_loader):
-            print(images.shape)
             
             images = torch.mul(images, 255).to(torch.float32)
             labels = labels.to(torch.float32)
             
             if not IS_BASELINE_NETWORK:
                 images = full_comp(images)
-            print(images.shape)
             run_start = time.time()
-            outputs,loss = poptorch_model(images,lhs,rhs,labels)
+
+            if not IS_BASELINE_NETWORK:
+                outputs,loss = poptorch_model(images,lhs,rhs,labels)
+            else:
+
+                outputs,loss = poptorch_model(images,labels)
             run_end = time.time()
             avg_loss += loss.mean()
             run_time = run_end-run_start
@@ -192,8 +194,12 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer: poptorch.optim.
                 if not IS_BASELINE_NETWORK:
                     images = full_comp(images)
 
-                outputs = poptorch_model_inf(images)
+                if not IS_BASELINE_NETWORK:
+                    outputs = poptorch_model_inf(images,lhs,rhs)
+                else:
 
+                    outputs = poptorch_model_inf(images)
+                outputs = sig(outputs)
                 loss = h_l(outputs,labels)
                 total_loss += loss.mean()
 
