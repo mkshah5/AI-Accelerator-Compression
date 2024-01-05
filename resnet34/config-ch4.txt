@@ -1,5 +1,5 @@
 {
-"batch_size" : 10,
+"batch_size" : 100,
 "chop_factor": 4,
 "rpixels" : 32,
 "cpixels" : 32,

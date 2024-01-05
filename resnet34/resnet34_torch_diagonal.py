@@ -49,7 +49,7 @@ MODEL_NAME = None
 COMPRESSOR = "dct"
 
 BENCHMARK_NAME = "resnet34"
-VERSION = "torch"
+VERSION = "torchdiagonal"
 
 COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
 
