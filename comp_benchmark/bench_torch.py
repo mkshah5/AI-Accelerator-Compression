@@ -127,12 +127,14 @@ def main():
 
     inputs = torch.rand(TRAIN_SIZE, 3, RPIX, CPIX)
     inputs = dct_compress(inputs)
-    inputs.to(device)
     for i in range(args.num_iterations):
         s1 = time.time()
+        inputs = inputs.to(device)
         out = model(inputs)
+        out = out.to('cpu')
         s2 = time.time()
         print("Step: "+str(i)+", Time(s): "+str(s2-s1))
+        inputs = inputs.to('cpu')
 
 
 

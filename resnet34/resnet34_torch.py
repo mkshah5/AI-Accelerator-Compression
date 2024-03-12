@@ -46,30 +46,35 @@ RBLKS = None
 CBLKS = None
 IS_BASELINE_NETWORK = None
 MODEL_NAME = None
-COMPRESSOR = "dct"
+COMPRESSOR = "zfp"
 
 BENCHMARK_NAME = "resnet34"
 VERSION = "torch"
 
-COMPRESSOR_PATH = "/home/mkshah5/SZ/build/bin/sz"
+COMPRESSOR_PATH = "/home/mkshah5/zfp/build/bin/zfp"
+ZFP_CR = None
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 # Dependent on the number of channels
-def sz_comp(x, err=1.1e-1):
+def zfp_comp(x, cr=4):
+    rate = float(32.0/cr)
+    print("Rate:" +str(rate))
     fshape = str(TRAIN_SIZE)+" "+str(PARAMS.nchannels)+" "+str(RPIX)+" "+str(CPIX)
+
+    fshape = str(CPIX)+" "+str(RPIX)+" "+str(PARAMS.nchannels)+" "+str(TRAIN_SIZE)
     n_x = x.numpy().astype(np.float32)
     n_x.tofile('tmpb.bin')
-    c_command = COMPRESSOR_PATH+" -z -f -M ABS -A "+str(err)+" -i tmpb.bin -4 "+fshape
-    d_command = COMPRESSOR_PATH+" -x -f -s tmpb.bin.sz -4 "+fshape+" -i tmpb.bin"
+    c_command = COMPRESSOR_PATH+" -i tmpb.bin -f -4 "+fshape+" -r "+str(rate)+" -z tmpb.zfp"
+    d_command = COMPRESSOR_PATH+" -f -r "+str(rate)+" -4 "+fshape+" -z tmpb.zfp -o tmpb.zfp.out"
     os.system(c_command)
-    cr = (os.stat('tmpb.bin').st_size)/os.stat('tmpb.bin.sz').st_size
+    cr = (os.stat('tmpb.bin').st_size)/os.stat('tmpb.zfp').st_size
     print("CR: "+str(cr))
     os.system(d_command)
-    decomp = np.fromfile('tmpb.bin.sz.out',dtype=np.float32)
+    decomp = np.fromfile('tmpb.zfp.out',dtype=np.float32)
     decomp = np.reshape(decomp, (TRAIN_SIZE,PARAMS.nchannels,RPIX,CPIX))
-    return torch.from_numpy(decomp), os.stat('tmpb.bin.sz').st_size
+    return torch.from_numpy(decomp), os.stat('tmpb.zfp').st_size
 
 def dct_comp(x):
     r = compress(torch.squeeze(x[:,0,:,:]), PARAMS)
@@ -91,8 +96,8 @@ def full_comp(x):
     if COMPRESSOR=="dct":
         c_res, size = dct_comp(torch.mul(x,255).to(torch.float32))
         return c_res, size
-    elif COMPRESSOR=="sz":
-        c_res, size = sz_comp(x.to(torch.float32))
+    elif COMPRESSOR=="zfp":
+        c_res, size = zfp_comp(x.to(torch.float32), cr=ZFP_CR)
         return torch.mul(c_res,255),size
 
 class ResNetCompress(nn.Module):
@@ -122,9 +127,10 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=0.0001)
-    parser.add_argument('--device',type=int,default=0)
+    parser.add_argument('--device',type=int,default=1)
     parser.add_argument('--config_path', type=str, default='./config-ch4.txt')
-    parser.add_argument('--compressor', type=str,default='dct')
+    parser.add_argument('--compressor', type=str,default='zfp')
+    parser.add_argument('--zfp_cr', type=float, default=4)
 
 
 def add_run_args(parser: argparse.ArgumentParser):
@@ -248,7 +254,7 @@ def train(args: argparse.Namespace, model: nn.Module, optimizer,device) -> None:
     torch.save(model, MODEL_NAME+".pt")
 
 def main():
-    global COMPRESSOR, PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME, GPUSTATS
+    global ZFP_CR, COMPRESSOR, PARAMS, TRAIN_SIZE, TEST_SIZE, CF, RPIX, CPIX, BD, RBLKS, CBLKS, IS_BASELINE_NETWORK, MODEL_NAME, GPUSTATS
 
     parser = argparse.ArgumentParser()
     add_common_args(parser)
@@ -265,7 +271,7 @@ def main():
     RBLKS = PARAMS.rblks
     CBLKS = PARAMS.cblks
     COMPRESSOR = args.compressor
-
+    ZFP_CR = args.zfp_cr
 
     IS_BASELINE_NETWORK = PARAMS.is_base
 
