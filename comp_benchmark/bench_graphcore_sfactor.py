@@ -42,7 +42,7 @@ MODEL_NAME = None
 
 BENCHMARK_NAME = "standalone"
 VERSION = "graphcore"
-SFACTOR =2 
+SFACTOR = 4 
 
 # Dependent on the number of channels
 def full_comp(x):

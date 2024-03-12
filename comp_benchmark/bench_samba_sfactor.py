@@ -53,7 +53,7 @@ MODEL_NAME = None
 
 BENCHMARK_NAME = "standalone"
 VERSION = "samba"
-SFACTOR = 2 
+SFACTOR = 16 
 
 # Dependent on the number of channels
 def full_comp(x):
